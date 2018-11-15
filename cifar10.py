@@ -70,6 +70,7 @@ class Net(nn.Module):
 
 
 net = Net()
+net = net.to(device)
 
 import torch.optim as optim
 
@@ -83,6 +84,7 @@ for epoch in range(2):  # loop over the dataset multiple times
     for i, data in enumerate(trainloader, 0):
         # get the inputs
         inputs, labels = data
+        inputs, labels = inputs.to(device), labels.to(device)
 
         # zero the parameter gradients
         optimizer.zero_grad()
