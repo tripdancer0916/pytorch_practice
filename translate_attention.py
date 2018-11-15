@@ -1,7 +1,7 @@
 
 # coding: utf-8
 
-# In[1]:
+# In[28]:
 
 
 from __future__ import unicode_literals, print_function, division
@@ -20,7 +20,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(device)
 
 
-# In[2]:
+# In[29]:
 
 
 SOS_token = 0
@@ -49,7 +49,7 @@ class Lang:
             
 
 
-# In[3]:
+# In[30]:
 
 
 def unicodeToAscii(s):
@@ -65,7 +65,7 @@ def normalizeString(s):
     return s
 
 
-# In[4]:
+# In[31]:
 
 
 def readLangs(lang1, lang2, reverse=False):
@@ -86,7 +86,7 @@ def readLangs(lang1, lang2, reverse=False):
     return input_lang, output_lang, pairs
 
 
-# In[5]:
+# In[32]:
 
 
 MAX_LENGTH = 10
@@ -109,7 +109,7 @@ def filterPairs(pairs):
     return [pair for pair in pairs if filterPair(pair)]
 
 
-# In[6]:
+# In[33]:
 
 
 def prepareData(lang1, lang2, reverse=False):
@@ -130,7 +130,7 @@ input_lang, output_lang, pairs = prepareData('eng', 'fra', True)
 print(random.choice(pairs))
 
 
-# In[7]:
+# In[34]:
 
 
 #encoder
@@ -152,7 +152,7 @@ class EncoderRNN(nn.Module):
         return torch.zeros(1, 1, self.hidden_size, device=device)
 
 
-# In[8]:
+# In[35]:
 
 
 #decoder
@@ -177,7 +177,7 @@ class DecoderRNN(nn.Module):
         return torch.zeros(1, 1, self.hidden_size, device=device)
 
 
-# In[9]:
+# In[36]:
 
 
 # Attention Decoder
@@ -193,14 +193,15 @@ class AttnDecoderRNN(nn.Module):
         self.attn = nn.Linear(self.hidden_size * 2, self.max_length)
         self.attn_combine = nn.Linear(self.hidden_size*2, self.hidden_size)
         self.dropout = nn.Dropout(self.dropout_p)
-        self.gru = nn.GRU(self.hidden_size, self.output_size)
+        self.gru = nn.GRU(self.hidden_size, self.hidden_size)
+        self.out = nn.Linear(self.hidden_size, self.output_size)
         
     def forward(self, input, hidden, encoder_outputs):
         embedded = self.embedding(input).view(1, 1, -1)
         embedded = self.dropout(embedded)
         
         attn_weights = F.softmax(self.attn(torch.cat((embedded[0], hidden[0]), 1)),  dim=1)
-        attn_applied = torch.bmm(attn_weights.unsqeeze(0), encoder_outputs.unsqueeze(0))
+        attn_applied = torch.bmm(attn_weights.unsqueeze(0), encoder_outputs.unsqueeze(0))
         
         output = torch.cat((embedded[0], attn_applied[0]), 1)
         output = self.attn_combine(output).unsqueeze(0)
@@ -215,7 +216,7 @@ class AttnDecoderRNN(nn.Module):
         return torch.zeros(1, 1, self.hidden_size, device=device)
 
 
-# In[10]:
+# In[37]:
 
 
 def indexesFromSentence(lang, sentence):
@@ -232,7 +233,7 @@ def tensorsFromPair(pair):
     return (input_tensor, target_tensor)
 
 
-# In[12]:
+# In[38]:
 
 
 teacher_forcing_ratio = 0.5
@@ -253,36 +254,36 @@ def train(input_tensor, target_tensor, encoder, decoder, encoder_optimizer, deco
         encoder_output, encoder_hidden = encoder(input_tensor[ei], encoder_hidden)
         encoder_outputs[ei] = encoder_output[0, 0]
         
-        decoder_input = torch.tensor([[SOS_token]], device=device)
+    decoder_input = torch.tensor([[SOS_token]], device=device)
         
-        decoder_hidden = encoder_hidden
+    decoder_hidden = encoder_hidden
         
-        use_teacher_forcing = True if random.random() < teacher_forcing_ratio else False
+    use_teacher_forcing = True if random.random() < teacher_forcing_ratio else False
         
-        if use_teacher_forcing:
-            for di in range(target_length):
-                decoder_output, decoder_hidden, decoder_attention = decoder(decoder_input, decoder_hidden, encoder_outputs)
-                loss += criterion(decoder_output, target_tensor[di])
-                decoder_input = target_tensor[di]
-        else:
-            for di in range(target_length):
-                decoder_output, decoder_hidden, decoder_attention = decoder(decoder_input, decoder_hidden, encoder_outputs)
-                topv, topi = decoder_output.topk(1)
-                decoder_input = topi.squeeze().detach()
+    if use_teacher_forcing:
+        for di in range(target_length):
+            decoder_output, decoder_hidden, decoder_attention = decoder(decoder_input, decoder_hidden, encoder_outputs)
+            loss += criterion(decoder_output, target_tensor[di])
+            decoder_input = target_tensor[di]
+    else:
+        for di in range(target_length):
+            decoder_output, decoder_hidden, decoder_attention = decoder(decoder_input, decoder_hidden, encoder_outputs)
+            topv, topi = decoder_output.topk(1)
+            decoder_input = topi.squeeze().detach()
                 
-                loss += criterion(decoder_output, target_tensor[di])
-                if decoder_input.item() == EOS_token:
-                    break
+            loss += criterion(decoder_output, target_tensor[di])
+            if decoder_input.item() == EOS_token:
+                break
                     
-            loss.backward()
+    loss.backward()
             
-            encoder_optimizer.step()
-            decoder_optimizer.step()
+    encoder_optimizer.step()
+    decoder_optimizer.step()
             
-            return loss.item() / target_length
+    return loss.item() / target_length
 
 
-# In[13]:
+# In[39]:
 
 
 import time
@@ -301,7 +302,7 @@ def timeSince(since, percent):
     return '%s (- %s)' % (asMinutes(s), asMinutes(rs))
 
 
-# In[14]:
+# In[40]:
 
 
 def trainIters(encoder, decoder, n_iters, print_every=1000, plot_every=100, learning_rate=0.01):
@@ -312,7 +313,7 @@ def trainIters(encoder, decoder, n_iters, print_every=1000, plot_every=100, lear
     
     encoder_optimizer = optim.SGD(encoder.parameters(), lr=learning_rate)
     decoder_optimizer = optim.SGD(decoder.parameters(), lr=learning_rate)
-    training_pairs = [tensorFromPair(random.choice(pairs)) for i in range(n_iters)]
+    training_pairs = [tensorsFromPair(random.choice(pairs)) for i in range(n_iters)]
     criterion = nn.NLLLoss()
     
     for iter in range(1, n_iters + 1):
@@ -337,7 +338,7 @@ def trainIters(encoder, decoder, n_iters, print_every=1000, plot_every=100, lear
     showPlot(plot_losses)
 
 
-# In[15]:
+# In[41]:
 
 
 import matplotlib.pyplot as plt
@@ -353,4 +354,66 @@ def showPlot(points):
     loc = ticker.MultipleLocator(base=0.2)
     ax.yaxis.set_major_locator(loc)
     plt.plot(points)
+
+
+# In[42]:
+
+
+def evaluate(encoder, decoder, sentence, max_length=MAX_LENGTH):
+    with torch.no_grad():
+        input_tensor = tensorFromSentence(input_lang, sentence)
+        input_length = input_tensor.size()[0]
+        encoder_hidden = encoder.initHidden()
+        
+        encoder_outputs = torch.zeros(max_length, encoder.hidden_size, device=device)
+        
+        for ei in range(input_length):
+            encoder_output, encoder_hidden = encoder(input_tensor[ei], encoder_hidden)
+            
+            encoder_outputs[ei] += encoder_output[0, 0]
+            
+        decoder_input = torch.tensor([[SOS_token]], device=device)
+        
+        decoder_hidden = encoder_hidden
+        
+        decoder_words = []
+        decoder_attentions = torch.zeros(max_length, max_length)
+        
+        for di in range(max_length):
+            decoder_output, decoder_hidden, decoder_attention = decoder(decoder_input, decoder_hidden, encoder_outputs)
+            decoder_attentions[di] = decoder_attention.data
+            topv, topi = decoder_output.data.topk(1)
+            if topi.item() == EOS_token:
+                decoded_words.append('<EOS>')
+                break
+            else:
+                decoded_words.append(output_lang.index2word[topi.item()])
+                
+            decoder_input = topi.squeeze().detach()
+            
+        return decoded_words, decoder_attentions[:di + 1]
+
+
+# In[43]:
+
+
+def evaluateRandomly(encoder, decoder, n=10):
+    for i in range(n):
+        pair = random.choice(pairs)
+        print('>', pair[0])
+        print('=', pair[1])
+        output_words, attention = evaluate(encoder, decoder, pair[0])
+        output_sentence = ' '.join(output_words)
+        print('<', output_sentence)
+        print('')
+
+
+# In[44]:
+
+
+hidden_size = 256
+encoder1 = EncoderRNN(input_lang.n_words, hidden_size).to(device)
+attn_decoder1 = AttnDecoderRNN(hidden_size,  output_lang.n_words, dropout_p=0.1).to(device)
+
+trainIters(encoder1, attn_decoder1, 75000, print_every=5000)
 
