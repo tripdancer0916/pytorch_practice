@@ -42,7 +42,7 @@ images, labels = dataiter.next()
 # show images
 # imshow(torchvision.utils.make_grid(images))
 # print labels
-print(' '.join('%5s' % classes[labels[j]] for j in range(4)))
+# print(' '.join('%5s' % classes[labels[j]] for j in range(4)))
 
 import torch.nn as nn
 import torch.nn.functional as F
@@ -139,6 +139,7 @@ class_total = list(0. for i in range(10))
 with torch.no_grad():
     for data in testloader:
         images, labels = data
+        inputs, labels = inputs.to(device), labels.to(device)
         outputs = net(images)
         _, predicted = torch.max(outputs, 1)
         c = (predicted == labels).squeeze()
